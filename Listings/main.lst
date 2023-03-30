@@ -1,0 +1,402 @@
+C51 COMPILER V9.60.7.0   MAIN                                                              03/24/2023 22:26:20 PAGE 1   
+
+
+C51 COMPILER V9.60.7.0, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN .\Objects\main.obj
+COMPILER INVOKED BY: D:\Keil_v5\C51\BIN\C51.EXE main.c OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\Listings\main
+                    -.lst) TABS(2) OBJECT(.\Objects\main.obj)
+
+line level    source
+
+   1          //**************************
+   2          //程序说明:stc15系列采集ds18b20温度数据，并从串口输出
+   3          //采用的是11.0592M晶振，波特率9600
+   4          //**************************
+   5          #include "STC15Fxxxx.H" 
+   6          
+   7          //IO口声明
+   8          #define ds18b20_io P55   //P5.5口作为数据读取接口
+   9          
+  10          
+  11          //变量定义
+  12          u16 datas;//保存温度数据
+  13          
+  14          //函数声明
+  15          void Delay3us();
+  16          void Delay6us();
+  17          void Delay24us();
+  18          void Delay30us();
+  19          void Delay300us();
+  20          void Delay600us();
+  21          void Delay50ms();
+  22          void Delay150ms();
+  23          void Delay1000ms();
+  24          void led50(u8 i);                       //led闪烁50毫秒
+  25          void led150(u8 i);                      //led闪烁150毫秒
+  26          void led1000(u8 i);                     //led闪烁1秒
+  27          
+  28          // DS18B20
+  29          bit  ds18b20_init();                    //初始化ds18b20
+  30          u8   ds18b20_read_one_char();           //从ds18b20读取一个字节
+  31          void ds18b20_write_one_char(u8 dat);    //向ds18b20写入一个字节
+  32          void ds18b20_ready_read_temp();         //准备读取数据
+  33          u16  ds18b20_read_temp_val();           //读取数据,返回温度值，返回实际值的100倍，且万
+             -位为符号位，例：12556为-25.56度，2556为25.56度
+  34          
+  35          // Uart
+  36          void  serial_init();                    //串口初始化
+  37          void  serial_send_byte(u8 dat);         //串口发送一个字节的数据
+  38          void  serial_send_string(u8 *dat);      //串口发送字符串
+  39          
+  40          //主函数
+  41          void main()
+  42          {
+  43   1        P5M1 = 0; P5M0 = 0x10;  //P54设置为推挽输出，其他为准双向口
+  44   1        led50(10);              //开机提示
+  45   1        P54=0;
+  46   1        datas=0;
+  47   1        serial_init();          //串口初始化
+  48   1        
+  49   1        while(1)
+  50   1        {
+  51   2          datas=ds18b20_read_temp_val();
+  52   2          serial_send_string("temperature: ");
+  53   2          if(datas/10000 == 1)                                            //如果万位为1，则表示温度为�
+C51 COMPILER V9.60.7.0   MAIN                                                              03/24/2023 22:26:20 PAGE 2   
+
+             -��
+  54   2            serial_send_byte('-');                                  //输出负号
+  55   2          serial_send_byte(datas%10000/1000+'0');     //十位
+  56   2          serial_send_byte(datas%1000/100+'0');         //个位
+  57   2          serial_send_byte('.');
+  58   2          serial_send_byte(datas%100/10+'0');         //小数点后第一位
+  59   2          serial_send_byte(datas%10+'0');                 //小数点后第二位
+  60   2          serial_send_string("C\r\n");
+  61   2          
+  62   2          if(datas<3400)
+  63   2          {
+  64   3            P54=0;    //继电器为0断开
+  65   3            led1000(1);
+  66   3          }
+  67   2          else if(datas>3500)
+  68   2          {
+  69   3            P54=1;    //继电器为1连通
+  70   3            led150(6);
+  71   3          }
+  72   2          else//临界值处理(34°C~35°C)
+  73   2          {
+  74   3            led50(10);//led快闪表示温度正处于临界值
+  75   3          }
+  76   2        }
+  77   1      
+  78   1      }
+  79          //ds18b20初始化
+  80          bit ds18b20_init()
+  81          {
+  82   1          u8 init_success_tag=0;
+  83   1          ds18b20_io=1;//拉高
+  84   1          Delay6us();//6us
+  85   1          ds18b20_io=0;//拉低
+  86   1          Delay600us();//600us
+  87   1          ds18b20_io=1;//拉高
+  88   1          Delay30us();//30us
+  89   1          init_success_tag=ds18b20_io;
+  90   1          Delay600us();//600us
+  91   1          return init_success_tag;
+  92   1      }
+  93          //读取一个字节
+  94          u8 ds18b20_read_one_char()
+  95          {
+  96   1          u8 i=0;
+  97   1          u8 dat=0;
+  98   1          for(i=0;i<8;i++)
+  99   1          {
+ 100   2              ds18b20_io=1;//拉高
+ 101   2              NOP1();
+ 102   2              ds18b20_io=0;//拉低
+ 103   2              dat>>=1;
+ 104   2              NOP1();
+ 105   2              ds18b20_io=1;//拉高
+ 106   2              Delay6us();//6us
+ 107   2              if(ds18b20_io==1)
+ 108   2                  dat|=0x80;
+ 109   2              else
+ 110   2                  dat|=0x00;
+ 111   2              Delay24us();//24us
+ 112   2          }
+ 113   1          return (dat);
+ 114   1      }
+C51 COMPILER V9.60.7.0   MAIN                                                              03/24/2023 22:26:20 PAGE 3   
+
+ 115          //向传感器写入一个字节
+ 116          void ds18b20_write_one_char(u8 dat)
+ 117          {
+ 118   1          u8 i=0;
+ 119   1          for(i=0;i<8;i++)
+ 120   1          {
+ 121   2              ds18b20_io=1;//拉高
+ 122   2              NOP1();
+ 123   2              ds18b20_io=0;//拉低
+ 124   2              ds18b20_io=dat&0x01;
+ 125   2              Delay30us();//30us
+ 126   2              ds18b20_io=1;//拉高
+ 127   2              Delay3us();//3us
+ 128   2              dat>>=1;
+ 129   2          }
+ 130   1          Delay6us();
+ 131   1          Delay6us();//12us
+ 132   1      }
+ 133          //准备读取一个温度值
+ 134          void ds18b20_ready_read_temp()
+ 135          {
+ 136   1          ds18b20_init();                          //初始化
+ 137   1          ds18b20_write_one_char(0xcc);//忽略读序列号
+ 138   1          ds18b20_write_one_char(0x44);//启动温度转换
+ 139   1          Delay300us();                                   //300us,等待转换完毕
+ 140   1          ds18b20_init();                          //初始化
+ 141   1          ds18b20_write_one_char(0xcc);//忽略读序列号
+ 142   1          ds18b20_write_one_char(0xbe);//读取温度寄存器
+ 143   1      }
+ 144          //读取数据,返回温度值，返回实际值的100倍，且万位为符号位，例：12556
+ 145          u16 ds18b20_read_temp_val()
+ 146          {
+ 147   1          u16 temp_16_bit=0;
+ 148   1          u8  temp_L=0;
+ 149   1          u8  temp_H=0;
+ 150   1          ds18b20_ready_read_temp();
+ 151   1          temp_L=ds18b20_read_one_char();//读取温度低八位
+ 152   1          temp_H=ds18b20_read_one_char();//读取温度高八位
+ 153   1          if(temp_H>0x7f)
+ 154   1          {
+ 155   2              temp_L=~temp_L;                    //补码转换，取反加一
+ 156   2              temp_H=~temp_H+1;  
+ 157   2              temp_16_bit=100;
+ 158   2          }
+ 159   1          temp_16_bit=temp_16_bit+temp_H*16+temp_L/16;
+ 160   1          temp_16_bit=temp_16_bit*100;
+ 161   1          temp_16_bit=temp_16_bit+((temp_L&0x0f)*10/16)*10;
+ 162   1          temp_16_bit=temp_16_bit+(temp_L&0x0f)*100/16%10;
+ 163   1          return (u16)(temp_16_bit);
+ 164   1      }
+ 165          //延时函数
+ 166          void Delay3us()   //@11.0592MHz
+ 167          {
+ 168   1        unsigned char i;
+ 169   1      
+ 170   1        _nop_();
+ 171   1        _nop_();
+ 172   1        _nop_();
+ 173   1        i = 5;
+ 174   1        while (--i);
+ 175   1      }
+ 176          
+C51 COMPILER V9.60.7.0   MAIN                                                              03/24/2023 22:26:20 PAGE 4   
+
+ 177          void Delay6us()   //@11.0592MHz
+ 178          {
+ 179   1        unsigned char i;
+ 180   1      
+ 181   1        i = 14;
+ 182   1        while (--i);
+ 183   1      }
+ 184          
+ 185          void Delay24us()    //@11.0592MHz
+ 186          {
+ 187   1        unsigned char i;
+ 188   1      
+ 189   1        _nop_();
+ 190   1        _nop_();
+ 191   1        _nop_();
+ 192   1        i = 63;
+ 193   1        while (--i);
+ 194   1      }
+ 195          
+ 196          void Delay30us()    //@11.0592MHz
+ 197          {
+ 198   1        unsigned char i;
+ 199   1      
+ 200   1        _nop_();
+ 201   1        _nop_();
+ 202   1        i = 80;
+ 203   1        while (--i);
+ 204   1      }
+ 205          
+ 206          void Delay300us()   //@11.0592MHz
+ 207          {
+ 208   1        unsigned char i, j;
+ 209   1      
+ 210   1        _nop_();
+ 211   1        _nop_();
+ 212   1        i = 4;
+ 213   1        j = 54;
+ 214   1        do
+ 215   1        {
+ 216   2          while (--j);
+ 217   2        } while (--i);
+ 218   1      }
+ 219          
+ 220          void Delay600us()   //@11.0592MHz
+ 221          {
+ 222   1        unsigned char i, j;
+ 223   1      
+ 224   1        i = 7;
+ 225   1        j = 113;
+ 226   1        do
+ 227   1        {
+ 228   2          while (--j);
+ 229   2        } while (--i);
+ 230   1      }
+ 231          
+ 232          void Delay50ms()    //@11.0592MHz
+ 233          {
+ 234   1        unsigned char i, j, k;
+ 235   1      
+ 236   1        _nop_();
+ 237   1        _nop_();
+ 238   1        i = 3;
+C51 COMPILER V9.60.7.0   MAIN                                                              03/24/2023 22:26:20 PAGE 5   
+
+ 239   1        j = 26;
+ 240   1        k = 223;
+ 241   1        do
+ 242   1        {
+ 243   2          do
+ 244   2          {
+ 245   3            while (--k);
+ 246   3          } while (--j);
+ 247   2        } while (--i);
+ 248   1      }
+ 249          
+ 250          void Delay150ms()   //@11.0592MHz
+ 251          {
+ 252   1        unsigned char i, j, k;
+ 253   1      
+ 254   1        _nop_();
+ 255   1        _nop_();
+ 256   1        i = 7;
+ 257   1        j = 78;
+ 258   1        k = 167;
+ 259   1        do
+ 260   1        {
+ 261   2          do
+ 262   2          {
+ 263   3            while (--k);
+ 264   3          } while (--j);
+ 265   2        } while (--i);
+ 266   1      }
+ 267          
+ 268          void Delay1000ms()    //@11.0592MHz
+ 269          {
+ 270   1        unsigned char i, j, k;
+ 271   1      
+ 272   1        _nop_();
+ 273   1        _nop_();
+ 274   1        i = 43;
+ 275   1        j = 6;
+ 276   1        k = 203;
+ 277   1        do
+ 278   1        {
+ 279   2          do
+ 280   2          {
+ 281   3            while (--k);
+ 282   3          } while (--j);
+ 283   2        } while (--i);
+ 284   1      }
+ 285          
+ 286          
+ 287          //led闪烁函数
+ 288          void led50(u8 i)
+ 289          {
+ 290   1        while(i != 0)
+ 291   1        {
+ 292   2          P33=!P33;
+ 293   2          Delay50ms();
+ 294   2          P33=!P33;
+ 295   2          Delay50ms();
+ 296   2          i--;
+ 297   2        }
+ 298   1      }
+ 299          void led150(u8 i)
+ 300          {
+C51 COMPILER V9.60.7.0   MAIN                                                              03/24/2023 22:26:20 PAGE 6   
+
+ 301   1        while(i != 0)
+ 302   1        {
+ 303   2          P33=!P33;
+ 304   2          Delay150ms();
+ 305   2          P33=!P33;
+ 306   2          Delay150ms();
+ 307   2          i--;
+ 308   2        }
+ 309   1      }
+ 310          
+ 311          void led1000(u8 i)
+ 312          {
+ 313   1        while(i != 0)
+ 314   1        {
+ 315   2          P33=!P33;
+ 316   2          Delay1000ms();
+ 317   2          P33=!P33;
+ 318   2          Delay1000ms();
+ 319   2          i--;
+ 320   2        }
+ 321   1      }
+ 322          
+ 323          //串口初始化
+ 324          void serial_init()
+ 325          {
+ 326   1          SCON = 0x50;                //8位数据,可变波特率
+ 327   1          AUXR |= 0x01;                //串口1选择定时器2为波特率发生器
+ 328   1          AUXR &= 0xFB;                //定时器2时钟为Fosc/12,即12T
+ 329   1          T2L = 0xE8;                //设定定时初值  11.0592M
+ 330   1          T2H = 0xFF;                //设定定时初值
+ 331   1          AUXR |= 0x10;                //启动定时器2
+ 332   1          ES = 1;     //串行中断 允许控制位
+ 333   1          //REN = 1;    //串口1允许接收
+ 334   1          EA = 1;
+ 335   1      }
+ 336          //串口发送一个字节数据
+ 337          void serial_send_byte(u8 dat)
+ 338          {
+ 339   1          SBUF=dat;
+ 340   1          while(!TI) ;      //等到TI标志变为1
+ 341   1          TI=0;
+ 342   1      }
+ 343          
+ 344          //串口发送一串字符串
+ 345          void serial_send_string(u8 *dat)
+ 346          {
+ 347   1          while(*dat)
+ 348   1          {
+ 349   2              serial_send_byte(*(dat++));
+ 350   2          }
+ 351   1      }
+ 352          
+ 353          //********************* 串口1中断函数************************
+ 354          void UART1_int(void) interrupt UART1_VECTOR
+ 355          {
+ 356   1          if(RI)
+ 357   1          {
+ 358   2            TI = 0;
+ 359   2          }
+ 360   1          if(TI)    // 发送完成
+ 361   1          {
+ 362   2            TI = 0;
+C51 COMPILER V9.60.7.0   MAIN                                                              03/24/2023 22:26:20 PAGE 7   
+
+ 363   2          }
+ 364   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    740    ----
+   CONSTANT SIZE    =     18    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =      2      11
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
